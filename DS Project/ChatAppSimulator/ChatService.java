@@ -2,103 +2,168 @@ import java.util.HashMap;
 import java.util.Queue;
 import java.util.LinkedList;
 
+// Backend logic class
 public class ChatService {
 
-    // Using HashMap for O(1) user lookup by userId
+    // HashMap → stores users (fast lookup O(1))
     HashMap<String, User> users;
 
-    // Using Queue (LinkedList implementation) for message delivery (FIFO)
-    // Ensures messages are delivered in the exact order they were sent
+    // Queue → stores messages temporarily (FIFO)
     Queue<Message> messageQueue;
 
-    // Using HashMap to map a unique conversation key to its chat history
-    // Using LinkedList for storing chat history as per requirement
+    // HashMap + LinkedList → stores chat history
     HashMap<String, LinkedList<Message>> chatHistories;
 
+    // Root of group tree
+    Group rootGroup;
+
+    // Constructor
     public ChatService() {
-        users = new HashMap<>();
-        messageQueue = new LinkedList<>();
-        chatHistories = new HashMap<>();
+        users = new HashMap<>();           // initialize users
+        messageQueue = new LinkedList<>(); // queue using linked list
+        chatHistories = new HashMap<>();   // history map
+        rootGroup = new Group("Global");   // root group
     }
 
+    // Add user
     public void addUser(String userId, String name) {
-        User newUser = new User(userId, name);
-        // Storing in HashMap
-        users.put(userId, newUser);
+
+        User newUser = new User(userId, name); // create user
+
+        users.put(userId, newUser); // store in HashMap
+
         System.out.println("User added: " + name + " (ID: " + userId + ")");
     }
 
+    // Send message → goes to queue
     public void sendMessage(String senderId, String receiverId, String content) {
-        // Checking if users exist using HashMap lookup
+
+        // Check sender exists
         if (!users.containsKey(senderId)) {
-            System.out.println("Error: Sender " + senderId + " not found.");
-            return;
-        }
-        if (!users.containsKey(receiverId)) {
-            System.out.println("Error: Receiver " + receiverId + " not found.");
+            System.out.println("Error: Sender not found.");
             return;
         }
 
+        // Check receiver exists
+        if (!users.containsKey(receiverId)) {
+            System.out.println("Error: Receiver not found.");
+            return;
+        }
+
+        // Create message
         Message newMessage = new Message(senderId, receiverId, content);
-        // Adding message to Queue for later delivery
+
+        // Add to queue
         messageQueue.add(newMessage);
+
         System.out.println("Message queued from " + senderId + " to " + receiverId);
     }
 
+    // Deliver messages from queue
     public void deliverMessages() {
+
         System.out.println("\n--- Delivering Messages ---");
-        // Handle empty queue safely (Bonus requirement)
+
+        // If queue empty
         if (messageQueue.isEmpty()) {
-            System.out.println("No messages in queue to deliver.");
-            System.out.println("---------------------------\n");
+            System.out.println("No messages to deliver.");
             return;
         }
 
-        // Processing Queue (FIFO pattern)
+        // Process all messages
         while (!messageQueue.isEmpty()) {
-            Message currentMessage = messageQueue.poll();
-            String senderId = currentMessage.senderId;
-            String receiverId = currentMessage.receiverId;
 
-            // Generate unique key for the pair to store in HashMap
-            String conversationKey = generateConversationKey(senderId, receiverId);
+            Message msg = messageQueue.poll(); // remove first message
 
-            // If history doesn't exist for this pair, initialize a new LinkedList
-            if (!chatHistories.containsKey(conversationKey)) {
-                chatHistories.put(conversationKey, new LinkedList<>());
+            String key = generateConversationKey(msg.senderId, msg.receiverId);
+
+            // If no history exists
+            if (!chatHistories.containsKey(key)) {
+                chatHistories.put(key, new LinkedList<>());
             }
 
-            // Using LinkedList to store chat history sequences
-            chatHistories.get(conversationKey).add(currentMessage);
-            System.out.println("Delivered: " + currentMessage.content);
+            // Store in LinkedList history
+            chatHistories.get(key).add(msg);
+
+            System.out.println("Delivered: " + msg.content);
         }
-        System.out.println("---------------------------\n");
     }
 
-    public void viewChatHistory(String userId1, String userId2) {
-        System.out.println("--- Chat History between " + userId1 + " and " + userId2 + " ---");
-        String conversationKey = generateConversationKey(userId1, userId2);
+    // View chat history
+    public void viewChatHistory(String u1, String u2) {
 
-        // Fetching history from HashMap
-        if (!chatHistories.containsKey(conversationKey) || chatHistories.get(conversationKey).isEmpty()) {
+        String key = generateConversationKey(u1, u2);
+
+        if (!chatHistories.containsKey(key)) {
             System.out.println("No chat history found.");
-            System.out.println("----------------------------------------------\n");
             return;
         }
 
-        // Processing chat history stored in LinkedList
-        LinkedList<Message> history = chatHistories.get(conversationKey);
-        for (Message msg : history) {
-            System.out.println(msg.toString());
+        for (Message m : chatHistories.get(key)) {
+            System.out.println(m);
         }
-        System.out.println("----------------------------------------------\n");
     }
 
-    // Helper method to ensure user1_user2 and user2_user1 create the same key
+    // Generate unique key for conversation
     private String generateConversationKey(String u1, String u2) {
+
         if (u1.compareTo(u2) < 0) {
             return u1 + "_" + u2;
         }
+
         return u2 + "_" + u1;
+    }
+
+    // Create group
+    public void createGroup(String parentName, String newGroupName) {
+
+    // If parent is empty → use Global
+    if (parentName == null || parentName.trim().isEmpty()) {
+        parentName = "Global";
+    }
+
+    // Find parent group
+    Group parentGroup = rootGroup.findGroup(parentName);
+
+    if (parentGroup == null) {
+        System.out.println("Error: Parent group '" + parentName + "' not found.");
+        return;
+    }
+
+    // Check duplicate group
+    if (rootGroup.findGroup(newGroupName) != null) {
+        System.out.println("Error: Group already exists.");
+        return;
+    }
+
+    // Create new group
+    Group newGroup = new Group(newGroupName);
+
+    // Add under parent
+    parentGroup.addSubGroup(newGroup);
+
+    System.out.println("Group created: " + newGroupName + " (Under " + parentName + ")");
+   }
+    // Add user to group
+    public void addUserToGroup(String userId, String groupName) {
+
+        if (!users.containsKey(userId)) {
+            System.out.println("User not found");
+            return;
+        }
+
+        Group group = rootGroup.findGroup(groupName);
+
+        if (group == null) {
+            System.out.println("Group not found");
+            return;
+        }
+
+        group.addUser(users.get(userId));
+    }
+
+    // Print tree
+    public void printGroupTree() {
+        rootGroup.displayHierarchy("");
     }
 }
